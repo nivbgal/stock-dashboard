@@ -63,10 +63,11 @@ class AdvancedApiClient {
 
   /**
    * Get Market Indices (S&P 500, NASDAQ, DOW, Russell 2000)
-   * Requires Alpha Vantage or similar API key
+   * Uses Finnhub API
    */
   async getMarketIndices(): Promise<IMarketIndex[]> {
     const indices: IMarketIndex[] = []
+    const apiKey = import.meta.env.VITE_FINNHUB_KEY
 
     const symbols = [
       { symbol: '^GSPC', name: 'S&P 500', description: 'Large-cap U.S. equities index' },
@@ -75,14 +76,37 @@ class AdvancedApiClient {
       { symbol: '^RUT', name: 'Russell 2000', description: 'Small-cap U.S. equities' },
     ]
 
+    // If no API key, return demo data
+    if (!apiKey) {
+      console.warn('Finnhub API key not configured, using demo data')
+      return this.getDemoMarketIndices()
+    }
+
     try {
       for (const idx of symbols) {
         try {
-          // This would normally use a real API - for now return demo data
+          const response = await axios.get('https://finnhub.io/api/v1/quote', {
+            params: {
+              symbol: idx.symbol,
+              token: apiKey,
+            },
+          })
+
+          const data = response.data
+          indices.push({
+            symbol: idx.symbol,
+            name: idx.name,
+            value: data.c || 0, // current price
+            change: data.d || 0, // change
+            changePercent: data.dp || 0, // change percent
+            timestamp: new Date(),
+            description: idx.description,
+          })
+        } catch (error) {
+          console.error(`Failed to fetch ${idx.symbol} from Finnhub:`, error)
+          // Fall back to demo for this symbol
           const demoIndex = await this.getDemoMarketIndex(idx.symbol, idx.name, idx.description)
           indices.push(demoIndex)
-        } catch (error) {
-          console.error(`Failed to fetch ${idx.symbol}:`, error)
         }
       }
       return indices
